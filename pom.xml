@@ -11,6 +11,7 @@
     <properties>
         <lwjgl.version>3.2.2</lwjgl.version>
         <lwjgl.natives>natives-windows</lwjgl.natives>
+        <maven.compiler.release>12</maven.compiler.release>
     </properties>
 
     <dependencies>
