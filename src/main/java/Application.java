@@ -10,12 +10,19 @@ import static org.lwjgl.glfw.GLFW.*;
 import static org.lwjgl.system.MemoryStack.stackPush;
 import static org.lwjgl.system.MemoryUtil.NULL;
 
-import static org.lwjgl.opengl.GL11.*;
+import static org.lwjgl.opengl.GL33C.*;
 
 public class Application {
 
     // The window handle
     private long window;
+
+    // Simple Triangle Vertices
+    float vertices[] = {
+            -0.5f, -0.5f, 0.0f,
+             0.5f, -0.5f, 0.0f,
+             0.0f,  0.5f, 0.0f
+    };
 
     public static void main(String[] args) {
         new Application().run();
@@ -26,6 +33,9 @@ public class Application {
 
         init();
         loop();
+
+        // Clean up all of GLFW's resources that were allocated.
+        glfwTerminate();
     }
 
     private void init() {
@@ -87,6 +97,23 @@ public class Application {
         // LWJGL detects the context that is current in the current thread, creates the GLCapabilities instance
         // And makes the OpenGL bindings available for use.
         GL.createCapabilities();
+
+        // TODO: Read up on Java data types
+
+        // We generate an OpenGL buffer object
+        // OpenGL buffers can be used for many things. They are simply allocated memory which can be used to store whatever you want
+        int vbo = glGenBuffers();
+
+        // Now we bind our generated buffer to the GL_ARRAY_BUFFER target. This essentially means that we will be using it as
+        // as a vertex buffer object.
+        glBindBuffer(GL_ARRAY_BUFFER, vbo);
+
+        // Now that we have bound our buffer object to a target, we can start to make OpenGL calls to functions
+        // That affect the state relevant for that object
+        // Here we copy our vertice data to the GPU, to our newly created buffer object.
+        // We also hint to OpenGL that the date most likely won't change. This means that OpenGL can make some assumptions
+        // about the data which can be used to optimize it.
+        glBufferData(GL_ARRAY_BUFFER, vertices, GL_STATIC_DRAW);
 
         // Set the clear color
         glClearColor(1.0f, 0.0f, 0.0f, 0.0f);
