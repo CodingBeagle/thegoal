@@ -8,7 +8,6 @@ import java.io.IOException;
 import java.net.URISyntaxException;
 import java.nio.IntBuffer;
 import java.nio.file.Files;
-import java.nio.file.Path;
 import java.nio.file.Paths;
 
 import static org.lwjgl.glfw.GLFW.*;
@@ -24,9 +23,15 @@ public class Application {
 
     // Simple Triangle Vertices
     float vertices[] = {
-            -0.5f, -0.5f, 0.0f,
-            0.5f, -0.5f, 0.0f,
-            0.0f, 0.5f, 0.0f
+            0.5f, 0.5f, 0.0f, // Top right
+            0.5f, -0.5f, 0.0f, // Bottom right
+            -0.5f, -0.5f, 0.0f, // Bottom left
+            -0.5f, 0.5f, 0.0f // top left
+    };
+
+    int indices[] = {
+        0, 1, 3, // first triangle
+        1, 2, 3 // second triangle
     };
 
     public static void main(String[] args) {
@@ -89,12 +94,27 @@ public class Application {
         // Make the OpenGl context current
         glfwMakeContextCurrent(window);
 
+        glfwSetKeyCallback(window, (window, key, scancode, action, mods) -> {
+            if ( key == GLFW_KEY_SPACE && action == GLFW_PRESS ) {
+
+                if (!wireframeToggle) {
+                    glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+                    wireframeToggle = true;
+                } else {
+                    glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+                    wireframeToggle = false;
+                }
+            }
+        });
+
         // Enable v-sync
         glfwSwapInterval(1);
 
         // Make the window visible
         glfwShowWindow(window);
     }
+
+    boolean wireframeToggle = false;
 
     private void loop() {
         // This line is critical for LWJGL's interoperation with GLFW's OpenGl Context, or any other context
@@ -104,7 +124,66 @@ public class Application {
         GL.createCapabilities();
 
         // TODO: Read up on Java data types
-        CopyVerticesToGpu();
+
+        // OpenGl Core REQUIRES us to use Vertex Array Objects (VAOs)
+        // VAOs are OpenGL objects which will save state related to these calls:
+        // -- Calls to glEnableVertexAttribArray or glDisableVertexAttribArray
+        // -- Vertex attribute configurations via glVertexAttribPointer
+        // -- Vertex buffer objects associated with vertex attributes by calls to glVertexAttribPointer
+        int vao = glGenVertexArrays();
+        glBindVertexArray(vao);
+
+        // We generate an OpenGL buffer object
+        // OpenGL buffers can be used for many things. They are simply allocated memory which can be used to store whatever you want
+        int vbo = glGenBuffers();
+
+        // Now we bind our generated buffer to the GL_ARRAY_BUFFER target. This essentially means that we will be using it as
+        // as a vertex buffer object.
+        glBindBuffer(GL_ARRAY_BUFFER, vbo);
+
+        // Now that we have bound our buffer object to a target, we can start to make OpenGL calls to functions
+        // That affect the state relevant for that object
+        // Here we copy our vertice data to the GPU, to our newly created buffer object.
+        // We also hint to OpenGL that the date most likely won't change. This means that OpenGL can make some assumptions
+        // about the data which can be used to optimize it.
+        glBufferData(GL_ARRAY_BUFFER, vertices, GL_STATIC_DRAW);
+
+        int ebo = glGenBuffers();
+
+        // With Element Buffer Objects, we can give OpenGL a list of indices, describing the order
+        // In which triangles should be rendered from the vertices array.
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo);
+        glBufferData(GL_ELEMENT_ARRAY_BUFFER, indices, GL_STATIC_DRAW);
+
+        // In the vertex shader we specified that location 0 accepted a 3D vector as input
+        // OpenGL is very flexible when it comes to how to feed input into that location
+        // But that also means we have to describe how the buffer is structured
+        // So that OpenGL knows how to take the x, y and z number of each vertex described
+        // in our array
+        // Parameter 1: The index of the location we want to input to
+        // Parameter 2: The number of components per generic vertex attribute
+        // -- We have 3 components, since our input is a Vec3 in the vertex shader
+        // Parameter 3: The data type of each component.
+        // -- They are 32-bit floats
+        // Parameter 4: Should data be normalized. Should be FALSE for floats.
+        // Parameter 5: The byte offset between each consecutive generic vertex attribute.
+        // -- Our array is tightly packed, so 0 byte offset between them
+        // Parameter 6: The byte offset of the first component of the first generic vertex
+        // Attribute.
+        // -- This is 0 for us. It begins at the start of the array.
+        // NOTICE: glVertexAttribPointer reads the currently bound buffer in GL_ARRAY_BUFFER
+        // and stores it in the VAO, so unbinding the buffer in GL_ARRAY_BUFFER will not affect
+        // The currently bound VAO
+        glVertexAttribPointer(0, 3, GL_FLOAT, false,  0, 0);
+
+        // Enables the generic vertex attribute array specified by index
+        glEnableVertexAttribArray(0);
+
+        // Cleanup
+        glBindVertexArray(0);
+        glBindBuffer(GL_ARRAY_BUFFER, 0);
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+        glDisableVertexAttribArray(0);
 
         // We create and compile vertex shader object
         int vertexShader = glCreateShader(GL_VERTEX_SHADER);
@@ -114,14 +193,48 @@ public class Application {
         int fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
         compileShader(fragmentShader, "fragment");
 
+        // In OpenGL, compiled shaders have to be linked together to a shader program.
+        // An active shader program's shaders will be used when issuing render calls
+        int shaderProgram = glCreateProgram();
+
+        glAttachShader(shaderProgram, vertexShader);
+        glAttachShader(shaderProgram, fragmentShader);
+
+        glLinkProgram(shaderProgram);
+
+        try (MemoryStack stack = stackPush()) {
+            IntBuffer linkStatusBuffer = stack.callocInt(1);
+
+            glGetProgramiv(shaderProgram, GL_LINK_STATUS, linkStatusBuffer);
+
+            int linkStatus = linkStatusBuffer.get(0);
+
+            if (linkStatus != GL_TRUE) {
+                String shaderProgramLinkLog = glGetShaderInfoLog(shaderProgram);
+                System.out.println(shaderProgramLinkLog);
+                System.exit(-1);
+            }
+        }
+
+        // The shader program is now linked and can be used
+        glUseProgram(shaderProgram);
+
+        // Delete the shader objects. After they are linked we don't need them any longer
+        glDeleteShader(vertexShader);
+        glDeleteShader(fragmentShader);
+
         // Set the clear color
-        glClearColor(1.0f, 0.0f, 0.0f, 0.0f);
+        glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
+
+        glBindVertexArray(vao);
 
         // Run the rendering loop until the user has attempted to close
         // the window
         while (!glfwWindowShouldClose(window)) {
             // Clear the framebuffer
             glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+            glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
 
             // Swap the color buffers
             glfwSwapBuffers(window);
@@ -159,9 +272,10 @@ public class Application {
 
                 if (compilationSuccess != GL_TRUE) {
                     var shaderCompilationLog = glGetShaderInfoLog(vertexShader);
+                    System.out.println(shaderCompilationLog);
+                    System.exit(-1);
                 }
             }
-
         } catch (IOException e) {
             e.printStackTrace();
 
@@ -173,22 +287,5 @@ public class Application {
             // Terminate. If we can't find the shader there's nothing that can be done.
             System.exit(-1);
         }
-    }
-
-    private void CopyVerticesToGpu() {
-        // We generate an OpenGL buffer object
-        // OpenGL buffers can be used for many things. They are simply allocated memory which can be used to store whatever you want
-        int vbo = glGenBuffers();
-
-        // Now we bind our generated buffer to the GL_ARRAY_BUFFER target. This essentially means that we will be using it as
-        // as a vertex buffer object.
-        glBindBuffer(GL_ARRAY_BUFFER, vbo);
-
-        // Now that we have bound our buffer object to a target, we can start to make OpenGL calls to functions
-        // That affect the state relevant for that object
-        // Here we copy our vertice data to the GPU, to our newly created buffer object.
-        // We also hint to OpenGL that the date most likely won't change. This means that OpenGL can make some assumptions
-        // about the data which can be used to optimize it.
-        glBufferData(GL_ARRAY_BUFFER, vertices, GL_STATIC_DRAW);
     }
 }
