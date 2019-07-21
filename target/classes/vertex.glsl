@@ -8,10 +8,14 @@
 // In this case, we just need a single 3D vector because we just want position information for each vector
 // We also explicitly state that this input should be at location 0
 layout (location = 0) in vec3 aPos;
+layout (location = 1) in vec3 aColor;
+
+out vec3 ourColor;
 
 void main()
 {
     // gl_Position is a predefined variables of a VERTEX shader, and is the output of the shader
     // It is mandatory to set this (as it is the output!).
-    gl_Position = vec4(aPos.x, aPos.y, aPos.z, 1.0);
+    gl_Position = vec4(aPos, 1.0);
+    ourColor = aColor;
 }

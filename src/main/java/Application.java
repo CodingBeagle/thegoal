@@ -2,6 +2,7 @@ import org.lwjgl.*;
 import org.lwjgl.glfw.GLFWErrorCallback;
 import org.lwjgl.glfw.GLFWVidMode;
 import org.lwjgl.opengl.GL;
+import org.lwjgl.ovr.OVRVector3f;
 import org.lwjgl.system.MemoryStack;
 
 import java.io.IOException;
@@ -23,10 +24,11 @@ public class Application {
 
     // Simple Triangle Vertices
     float vertices[] = {
-            0.5f, 0.5f, 0.0f, // Top right
-            0.5f, -0.5f, 0.0f, // Bottom right
-            -0.5f, -0.5f, 0.0f, // Bottom left
-            -0.5f, 0.5f, 0.0f // top left
+            // Positions        // Colors
+             0.5f,  0.5f, 0.0f, 1.0f, 0.0f, 0.0f, // Top right
+             0.5f, -0.5f, 0.0f, 0.0f, 1.0f, 0.0f, // Bottom right
+            -0.5f, -0.5f, 0.0f, 0.0f, 0.0f, 1.0f, // Bottom left
+            -0.5f,  0.5f, 0.0f, 0.5f, 0.5f, 1.0f // top left
     };
 
     int indices[] = {
@@ -174,10 +176,16 @@ public class Application {
         // NOTICE: glVertexAttribPointer reads the currently bound buffer in GL_ARRAY_BUFFER
         // and stores it in the VAO, so unbinding the buffer in GL_ARRAY_BUFFER will not affect
         // The currently bound VAO
-        glVertexAttribPointer(0, 3, GL_FLOAT, false,  0, 0);
+
+        // Position attribute
+        glVertexAttribPointer(0, 3, GL_FLOAT, false, 6 * 4, 0);
+
+        // Color attribute
+        glVertexAttribPointer(1, 3, GL_FLOAT, false, 6 * 4, 3 * 4);
 
         // Enables the generic vertex attribute array specified by index
         glEnableVertexAttribArray(0);
+        glEnableVertexAttribArray(1);
 
         // Cleanup
         glBindVertexArray(0);
@@ -185,43 +193,13 @@ public class Application {
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
         glDisableVertexAttribArray(0);
 
-        // We create and compile vertex shader object
-        int vertexShader = glCreateShader(GL_VERTEX_SHADER);
-        compileShader(vertexShader, "vertex");
+        var shaderProgram = new ShaderProgram(
+                new Shader("vertex", ShaderType.VERTEX),
+                new Shader("fragment", ShaderType.FRAGMENT));
 
-        // We create and compile fragment shader object
-        int fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
-        compileShader(fragmentShader, "fragment");
+        shaderProgram.activate();
 
-        // In OpenGL, compiled shaders have to be linked together to a shader program.
-        // An active shader program's shaders will be used when issuing render calls
-        int shaderProgram = glCreateProgram();
-
-        glAttachShader(shaderProgram, vertexShader);
-        glAttachShader(shaderProgram, fragmentShader);
-
-        glLinkProgram(shaderProgram);
-
-        try (MemoryStack stack = stackPush()) {
-            IntBuffer linkStatusBuffer = stack.callocInt(1);
-
-            glGetProgramiv(shaderProgram, GL_LINK_STATUS, linkStatusBuffer);
-
-            int linkStatus = linkStatusBuffer.get(0);
-
-            if (linkStatus != GL_TRUE) {
-                String shaderProgramLinkLog = glGetShaderInfoLog(shaderProgram);
-                System.out.println(shaderProgramLinkLog);
-                System.exit(-1);
-            }
-        }
-
-        // The shader program is now linked and can be used
-        glUseProgram(shaderProgram);
-
-        // Delete the shader objects. After they are linked we don't need them any longer
-        glDeleteShader(vertexShader);
-        glDeleteShader(fragmentShader);
+        shaderProgram.set4dUniform("senderColor", 0.5f, 0.5f, 0.5f, 1.0f);
 
         // Set the clear color
         glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
@@ -241,51 +219,6 @@ public class Application {
 
             // Poll for window events.
             glfwPollEvents();
-        }
-    }
-
-    private void compileShader(int vertexShader, String shaderFileName) {
-        try {
-
-            // In Java, all classes has "Object" has a superclass.
-            // This "Object" class has the "getClass" method.
-            // This returns a runtime class of this Object.
-            // From this, we can get the class loader which loaded the class.
-            // Class Loaders: https://docs.oracle.com/en/java/javase/12/docs/api/java.base/java/lang/ClassLoader.html
-            // getResource will find a resource with the given name, relative to the class location
-            var relativeDirectory =
-                    Paths.get(getClass().getClassLoader().getResource(shaderFileName + ".glsl").toURI());
-
-            var vertexShaderContent = Files.readString(relativeDirectory);
-
-            // glShaderSource will set the source code of a given shader object to what the content of the
-            // given string is.
-            glShaderSource(vertexShader, vertexShaderContent);
-
-            glCompileShader(vertexShader);
-
-            try (MemoryStack stack = stackPush()) {
-                var compilationSuccessBuffer = stack.mallocInt(1);
-                glGetShaderiv(vertexShader, GL_COMPILE_STATUS, compilationSuccessBuffer);
-
-                var compilationSuccess = compilationSuccessBuffer.get(0);
-
-                if (compilationSuccess != GL_TRUE) {
-                    var shaderCompilationLog = glGetShaderInfoLog(vertexShader);
-                    System.out.println(shaderCompilationLog);
-                    System.exit(-1);
-                }
-            }
-        } catch (IOException e) {
-            e.printStackTrace();
-
-            // Terminate. If we can't find the shader there's nothing that can be done.
-            System.exit(-1);
-        } catch (URISyntaxException syntaxException) {
-            syntaxException.printStackTrace();
-
-            // Terminate. If we can't find the shader there's nothing that can be done.
-            System.exit(-1);
         }
     }
 }
