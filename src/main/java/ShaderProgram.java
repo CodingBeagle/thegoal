@@ -1,5 +1,7 @@
+import org.joml.Matrix4f;
 import org.lwjgl.system.MemoryStack;
 
+import java.nio.FloatBuffer;
 import java.nio.IntBuffer;
 
 import static org.lwjgl.opengl.GL20C.*;
@@ -22,6 +24,15 @@ public class ShaderProgram {
         // We need to have an active shader program before we can retrieve uniform locations of it
         int renderColorUniformLocation = glGetUniformLocation(shaderProgramId, "renderColor");
         glUniform4f(renderColorUniformLocation, 0.5f, 0.5f, 0.5f, 1.0f);
+    }
+
+    public void setMatrix4fv(String uniformName, Matrix4f matrix) {
+        try (MemoryStack stack = MemoryStack.stackPush()) {
+            FloatBuffer fb = matrix.get(stack.mallocFloat(16));
+
+            int transformationMatrixLocation = glGetUniformLocation(shaderProgramId, "transform");
+            glUniformMatrix4fv(transformationMatrixLocation, false, fb);
+        }
     }
 
     private void CreateShaderObject() {

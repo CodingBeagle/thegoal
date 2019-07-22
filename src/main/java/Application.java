@@ -1,7 +1,10 @@
+import org.joml.Matrix4f;
+import org.joml.Vector3fc;
 import org.lwjgl.*;
 import org.lwjgl.glfw.GLFWErrorCallback;
 import org.lwjgl.glfw.GLFWVidMode;
 import org.lwjgl.opengl.GL;
+import org.lwjgl.ovr.OVRMatrix4f;
 import org.lwjgl.ovr.OVRVector3f;
 import org.lwjgl.system.MemoryStack;
 
@@ -193,11 +196,15 @@ public class Application {
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
         glDisableVertexAttribArray(0);
 
-        var shaderProgram = new ShaderProgram(
-                new Shader("vertex", ShaderType.VERTEX),
-                new Shader("fragment", ShaderType.FRAGMENT));
+        var vertexShader = new Shader("transvertex", ShaderType.VERTEX);
+        var fragmentShader = new Shader("fragment", ShaderType.FRAGMENT);
+
+        var shaderProgram = new ShaderProgram(vertexShader, fragmentShader);
 
         shaderProgram.activate();
+
+        vertexShader.DeleteShader();
+        fragmentShader.DeleteShader();
 
         shaderProgram.set4dUniform("senderColor", 0.5f, 0.5f, 0.5f, 1.0f);
 
@@ -206,11 +213,21 @@ public class Application {
 
         glBindVertexArray(vao);
 
+        float someRotation = 0.0f;
+
         // Run the rendering loop until the user has attempted to close
         // the window
         while (!glfwWindowShouldClose(window)) {
             // Clear the framebuffer
             glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+            var myTransMatrix = new Matrix4f()
+                    .rotate((float) Math.toRadians(someRotation), 0.0f, 0.0f, 1.0f)
+                    .scale(1.0f, 1.0f, 1.0f);
+
+            shaderProgram.setMatrix4fv("transform", myTransMatrix);
+
+            someRotation += 0.5f;
 
             glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
 
