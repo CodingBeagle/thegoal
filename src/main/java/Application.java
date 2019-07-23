@@ -1,4 +1,5 @@
 import org.joml.Matrix4f;
+import org.joml.Quaternionf;
 import org.joml.Vector3fc;
 import org.lwjgl.*;
 import org.lwjgl.glfw.GLFWErrorCallback;
@@ -10,6 +11,8 @@ import org.lwjgl.system.MemoryStack;
 
 import java.io.IOException;
 import java.net.URISyntaxException;
+import java.nio.ByteBuffer;
+import java.nio.FloatBuffer;
 import java.nio.IntBuffer;
 import java.nio.file.Files;
 import java.nio.file.Paths;
@@ -221,9 +224,12 @@ public class Application {
             // Clear the framebuffer
             glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
+            Quaternionf myQuart = new Quaternionf();
+            myQuart.rotateAxis((float) Math.toRadians(someRotation), 0.0f, 0.0f, 1.0f);
+
             var myTransMatrix = new Matrix4f()
-                    .rotate((float) Math.toRadians(someRotation), 0.0f, 0.0f, 1.0f)
-                    .scale(1.0f, 1.0f, 1.0f);
+                    .scale(1.0f, 1.0f, 1.0f)
+                    .rotate(myQuart);
 
             shaderProgram.setMatrix4fv("transform", myTransMatrix);
 
